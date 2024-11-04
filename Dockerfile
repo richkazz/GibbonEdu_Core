@@ -3,7 +3,7 @@ FROM php:8.1-fpm-alpine AS builder
 
 WORKDIR /var/www/html
 
-# Install dependencies (as before)
+# Install dependencies
 RUN apk update && apk add --no-cache \
     git \
     zip \
@@ -11,6 +11,8 @@ RUN apk update && apk add --no-cache \
     curl \
     bash \
     libpng-dev \
+    libjpeg-turbo-dev \
+    freetype-dev \
     oniguruma-dev \
     autoconf \
     g++ \
@@ -19,7 +21,13 @@ RUN apk update && apk add --no-cache \
     gettext-dev \
     libzip-dev
 
-RUN docker-php-ext-install pdo pdo_mysql mbstring exif pcntl bcmath gd intl gettext zip
+# Install PHP extensions
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg
+RUN docker-php-ext-install pdo pdo_mysql mbstring exif pcntl bcmath gd gettext zip intl
+
+# Install PHP extensions *IN THE BUILDER STAGE*
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg
+RUN docker-php-ext-install pdo pdo_mysql mbstring exif pcntl bcmath gd gettext zip intl
 
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 ENV COMPOSER_ALLOW_SUPERUSER=1
@@ -35,8 +43,12 @@ WORKDIR /var/www/html
 
 COPY --from=builder /var/www/html /var/www/html
 
-# Copy Nginx configuration (now from the project directory)
+RUN chown -R www-data:www-data /var/www/html/uploads
+
+# Copy Nginx configuration
 COPY nginx.conf /etc/nginx/nginx.conf
+
+RUN apk add --no-cache nginx
 
 EXPOSE 80
 CMD ["sh", "-c", "nginx && php-fpm"]
